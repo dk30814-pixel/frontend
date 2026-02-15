@@ -3,7 +3,7 @@ import axios from 'axios';
 import './App.css';
 
 // IMPORTANT: Update this with your deployed backend URL
-const API_URL = process.env.REACT_APP_API_URL || 'https://food-recognition-backend-rzsl.onrender.com/';
+const API_URL = process.env.REACT_APP_API_URL || 'https://food-recognition-backend-rzsl.onrender.com';
 
 function App() {
   const [stream, setStream] = useState(null);
@@ -64,13 +64,10 @@ function App() {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
 
-      // Convert canvas to blob
-      const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Failed to create blob'));
-          }, 'image/jpeg', 0.95);
-        });
+      // Convert canvas to blob using dataURL method (more compatible)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
       
       // Send to backend
       const formData = new FormData();
