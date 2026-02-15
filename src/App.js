@@ -65,7 +65,12 @@ function App() {
       ctx.drawImage(video, 0, 0);
 
       // Convert canvas to blob
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to create blob'));
+          }, 'image/jpeg', 0.95);
+        });
       
       // Send to backend
       const formData = new FormData();
