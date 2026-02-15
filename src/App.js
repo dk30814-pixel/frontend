@@ -3,7 +3,7 @@ import axios from 'axios';
 import './App.css';
 
 // IMPORTANT: Update this with your deployed backend URL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://food-recognition-backend-rzsl.onrender.com/';
 
 function App() {
   const [stream, setStream] = useState(null);
