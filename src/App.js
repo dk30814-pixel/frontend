@@ -49,7 +49,18 @@ function App() {
   };
 
   const captureAndAnalyze = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current) {
+      setError('Camera not ready');
+      return;
+    }
+
+    const video = videoRef.current;
+    
+    // Check if video is actually playing
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      setError('Video not ready. Please wait a moment and try again.');
+      return;
+    }
 
     setAnalyzing(true);
     setError(null);
@@ -57,17 +68,29 @@ function App() {
 
     try {
       const canvas = canvasRef.current;
-      const video = videoRef.current;
       
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
+      
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Invalid video dimensions');
+      }
+      
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Convert canvas to blob using dataURL method (more compatible)
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
+      // Convert canvas to blob - wait for it to complete
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob && blob.size > 0) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create image blob'));
+          }
+        }, 'image/jpeg', 0.95);
+      });
+
+      console.log('Blob created:', blob.size, 'bytes');
       
       // Send to backend
       const formData = new FormData();
@@ -86,7 +109,7 @@ function App() {
         setError('Failed to analyze image');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to analyze image. Please try again.');
+      setError(err.message || err.response?.data?.error || 'Failed to analyze image. Please try again.');
       console.error('Analysis error:', err);
     } finally {
       setAnalyzing(false);
