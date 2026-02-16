@@ -1,119 +1,108 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
-// IMPORTANT: Update this with your deployed backend URL
-const API_URL = process.env.REACT_APP_API_URL || 'https://food-recognition-backend-rzsl.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 function App() {
-  const [stream, setStream] = useState(null);
   const [capturing, setCapturing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
 
   useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [stream]);
-
-  const startCamera = async () => {
-    try {
-      setError(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 }
-      });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        // Wait for video to be ready
-        await new Promise((resolve) => {
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current.play();
-            resolve();
-          };
+    if (capturing) {
+      const video = document.getElementById('video');
+      
+      // Access the webcam stream
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+          video.srcObject = stream;
+          video.play();
+        })
+        .catch((err) => {
+          console.error("Camera error:", err);
+          setError('Failed to access camera. Please ensure camera permissions are granted.');
+          setCapturing(false);
         });
-      }
-      setCapturing(true);
-    } catch (err) {
-      setError('Failed to access camera. Please ensure camera permissions are granted.');
-      console.error('Camera error:', err);
+      
+      // Cleanup: stop camera when component unmounts or capturing stops
+      return () => {
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        }
+      };
     }
+  }, [capturing]);
+
+  const startCamera = () => {
+    setError(null);
+    setCapturing(true);
   };
 
   const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    const video = document.getElementById('video');
+    if (video && video.srcObject) {
+      video.srcObject.getTracks().forEach(track => track.stop());
     }
     setCapturing(false);
   };
 
   const captureAndAnalyze = async () => {
-    if (!videoRef.current || !canvasRef.current) {
-      setError('Camera not ready');
-      return;
-    }
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-      setError('Video not ready. Please wait a moment.');
-      return;
-    }
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
 
     setAnalyzing(true);
     setError(null);
     setResult(null);
 
     try {
-      // Capture photo from webcam
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      // Ensure canvas dimensions match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Draw the current frame from the video onto the canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Get the image as a Blob
+      canvas.toBlob(async (blob) => {
+        if (!blob || blob.size === 0) {
+          setError('Failed to capture photo');
+          setAnalyzing(false);
+          return;
+        }
 
-      // Convert to blob
-      const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob && blob.size > 0) {
-            console.log('Photo captured:', blob.size, 'bytes');
-            resolve(blob);
+        console.log('Photo captured:', blob.size, 'bytes');
+        
+        try {
+          // Send to backend
+          const formData = new FormData();
+          formData.append('image', blob, 'capture.jpg');
+
+          const response = await axios.post(`${API_URL}/analyze`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            timeout: 30000
+          });
+
+          if (response.data.success) {
+            setResult(response.data);
+            stopCamera();
           } else {
-            reject(new Error('Failed to capture photo'));
+            setError('Failed to analyze image');
           }
-        }, 'image/jpeg', 0.95);
-      });
+        } catch (err) {
+          setError(err.response?.data?.error || 'Failed to analyze. Please try again.');
+          console.error('Analysis error:', err);
+        } finally {
+          setAnalyzing(false);
+        }
+      }, 'image/jpeg', 0.95);
       
-      // Send to backend
-      const formData = new FormData();
-      formData.append('image', blob, 'capture.jpg');
-
-      const response = await axios.post(`${API_URL}/analyze`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 30000
-      });
-
-      if (response.data.success) {
-        setResult(response.data);
-        stopCamera();
-      } else {
-        setError('Failed to analyze image');
-      }
     } catch (err) {
-      setError(err.message || err.response?.data?.error || 'Failed to analyze. Please try again.');
-      console.error('Analysis error:', err);
-    } finally {
+      setError(err.message || 'Failed to capture photo');
       setAnalyzing(false);
     }
   };
@@ -181,12 +170,18 @@ function App() {
           <div className="camera-section">
             <div className="video-container">
               <video
-                ref={videoRef}
+                id="video"
+                width="640"
+                height="480"
                 autoPlay
-                playsInline
                 className="video-feed"
               />
-              <canvas ref={canvasRef} style={{ display: 'none' }} />
+              <canvas 
+                id="canvas" 
+                width="640" 
+                height="480" 
+                style={{ display: 'none' }} 
+              />
               
               <div className="camera-overlay">
                 <div className="scan-frame"></div>
