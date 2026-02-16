@@ -32,6 +32,13 @@ function App() {
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play();
+            resolve();
+          };
+        });
       }
       setCapturing(true);
     } catch (err) {
@@ -57,10 +64,10 @@ function App() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    // if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-    //   setError('Video not ready. Please wait a moment.');
-    //   return;
-    // }
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      setError('Video not ready. Please wait a moment.');
+      return;
+    }
 
     setAnalyzing(true);
     setError(null);
@@ -68,12 +75,8 @@ function App() {
 
     try {
       // Capture photo from webcam
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      if (canvas.width === 0 || canvas.height === 0) {
-        throw new Error('Invalid video dimensions');
-      }
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
       
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
