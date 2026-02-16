@@ -57,10 +57,10 @@ function App() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-      setError('Video not ready. Please wait a moment.');
-      return;
-    }
+    // if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+    //   setError('Video not ready. Please wait a moment.');
+    //   return;
+    // }
 
     setAnalyzing(true);
     setError(null);
