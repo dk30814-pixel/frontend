@@ -11,7 +11,6 @@ function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [capturedImage, setCapturedImage] = useState(null); // NEW: Store captured photo
   
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -47,10 +46,9 @@ function App() {
       setStream(null);
     }
     setCapturing(false);
-    setCapturedImage(null);
   };
 
-  const takePhoto = () => {
+  const captureAndAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current) {
       setError('Camera not ready');
       return;
@@ -59,36 +57,8 @@ function App() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    // Check if video is ready
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
       setError('Video not ready. Please wait a moment.');
-      return;
-    }
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    if (canvas.width === 0 || canvas.height === 0) {
-      setError('Invalid video dimensions');
-      return;
-    }
-    
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Get the image as data URL for preview
-    const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-    setCapturedImage(imageDataUrl);
-  };
-
-  const retakePhoto = () => {
-    setCapturedImage(null);
-    setError(null);
-  };
-
-  const captureAndAnalyze = async () => {
-    if (!canvasRef.current || !capturedImage) {
-      setError('Please take a photo first');
       return;
     }
 
@@ -97,20 +67,28 @@ function App() {
     setResult(null);
 
     try {
-      const canvas = canvasRef.current;
+      // Capture photo from webcam
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Invalid video dimensions');
+      }
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Convert canvas to blob
+      // Convert to blob
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
           if (blob && blob.size > 0) {
+            console.log('Photo captured:', blob.size, 'bytes');
             resolve(blob);
           } else {
-            reject(new Error('Failed to create image blob'));
+            reject(new Error('Failed to capture photo'));
           }
         }, 'image/jpeg', 0.95);
       });
-
-      console.log('Blob created:', blob.size, 'bytes');
       
       // Send to backend
       const formData = new FormData();
@@ -125,12 +103,12 @@ function App() {
 
       if (response.data.success) {
         setResult(response.data);
-        stopCamera(); // Stop camera after successful analysis
+        stopCamera();
       } else {
         setError('Failed to analyze image');
       }
     } catch (err) {
-      setError(err.message || err.response?.data?.error || 'Failed to analyze image. Please try again.');
+      setError(err.message || err.response?.data?.error || 'Failed to analyze. Please try again.');
       console.error('Analysis error:', err);
     } finally {
       setAnalyzing(false);
@@ -196,7 +174,7 @@ function App() {
           </button>
         )}
 
-        {capturing && !result && !capturedImage && (
+        {capturing && !result && (
           <div className="camera-section">
             <div className="video-container">
               <video
@@ -216,33 +194,6 @@ function App() {
             <div className="camera-controls">
               <button 
                 className="capture-btn" 
-                onClick={takePhoto}
-              >
-                <span className="btn-icon">📸</span>
-                Take Photo
-              </button>
-              <button className="stop-btn" onClick={stopCamera}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {capturing && !result && capturedImage && (
-          <div className="camera-section">
-            <div className="video-container">
-              <img 
-                src={capturedImage} 
-                alt="Captured food" 
-                className="video-feed"
-                style={{ width: '100%', height: 'auto' }}
-              />
-              <canvas ref={canvasRef} style={{ display: 'none' }} />
-            </div>
-
-            <div className="camera-controls">
-              <button 
-                className="capture-btn" 
                 onClick={captureAndAnalyze}
                 disabled={analyzing}
               >
@@ -253,13 +204,13 @@ function App() {
                   </>
                 ) : (
                   <>
-                    <span className="btn-icon">✨</span>
-                    Analyze Photo
+                    <span className="btn-icon">📸</span>
+                    Take Photo & Analyze
                   </>
                 )}
               </button>
-              <button className="stop-btn" onClick={retakePhoto} disabled={analyzing}>
-                Retake Photo
+              <button className="stop-btn" onClick={stopCamera} disabled={analyzing}>
+                Cancel
               </button>
             </div>
           </div>
